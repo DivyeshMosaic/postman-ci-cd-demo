@@ -1,27 +1,17 @@
-name: Run Postman Tests
+name: Automated API tests using Postman CLI
 
-on:
-  push:
-    branches: ["main"]
-  pull_request:
+on: push
 
 jobs:
-  test:
-    runs-on: ubuntu-latest
-
+  automated-api-tests:
+    runs-on: windows-latest
     steps:
-    - name: Checkout Repository
-      uses: actions/checkout@v3
-
-    - name: Install Node.js
-      uses: actions/setup-node@v3
-      with:
-        node-version: '18'
-
-    - name: Install Postman CLI
-      run: |
-        curl -o- "https://dl-cli.pstmn.io/install/linux64.sh" | sh
-
-
-    - name: Run Postman Collection
-      run: postman collection run "DivyeshCollection.postman_collection.json"
+      - uses: actions/checkout@v4
+      - name: Install Postman CLI
+        run: |
+          powershell.exe -NoProfile -InputFormat None -ExecutionPolicy AllSigned -Command "[System.Net.ServicePointManager]::SecurityProtocol = 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://dl-cli.pstmn.io/install/win64.ps1'))"
+      - name: Login to Postman CLI
+        run: postman login --with-api-key ${{ 691a4b52847fb1000104561f-8c77e8869bcfe488a3f4d1fe8bf0c3ad46 }}
+      - name: Run API tests
+        run: |
+          postman collection run "50085984-0ad7bb0e-5cde-4ad6-b2ab-4e4d3205fdb7"
