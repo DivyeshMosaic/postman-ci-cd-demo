@@ -24,4 +24,4 @@ jobs:
 
 
     - name: Run Postman Collection
-      run: postman collection run DivyeshCollection.postman_collection.json
+      run: postman collection run "Divyesh's Collection.postman_collection.json
