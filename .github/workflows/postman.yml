@@ -18,9 +18,10 @@ jobs:
       with:
         node-version: '18'
 
-    -     - name: Install Postman CLI
+    - name: Install Postman CLI
       run: |
         curl -o- "https://dl-cli.pstmn.io/install/linux64.sh" | sh
+
 
     - name: Run Postman Collection
       run: postman collection run DivyeshCollection.postman_collection.json
