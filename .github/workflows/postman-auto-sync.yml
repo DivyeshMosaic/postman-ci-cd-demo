@@ -1,12 +1,9 @@
-name: Auto Sync + Run Postman Collection
+name: Run Postman Tests (Auto-sync)
 
 on:
-  push:
-    branches:
-      - main
+  workflow_dispatch:
   schedule:
-    - cron: "0 */6 * * *" # run every 6 hours (optional)
-  workflow_dispatch:       # manual trigger
+    - cron: "*/5 * * * *"   # every 5 minutes
 
 jobs:
   run-postman:
@@ -16,18 +13,28 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v3
 
+    # Install Postman CLI
     - name: Install Postman CLI
       run: |
         curl -o- "https://dl-cli.pstmn.io/install/linux64.sh" | sh
 
-    - name: Fetch latest collection JSON from Postman
+    # Login using API KEY (MUST DO THIS BEFORE RUNNING)
+    - name: Login to Postman CLI
       run: |
-        curl -X GET \
+        postman login --with-api-key ${{ secrets.POSTMAN_API_KEY }}
+
+    # Fetch latest collection in proper format
+    - name: Download latest Postman Collection
+      run: |
+        curl -s -X GET \
         "https://api.postman.com/collections/${{ secrets.POSTMAN_COLLECTION_ID }}" \
         -H "X-Api-Key: ${{ secrets.POSTMAN_API_KEY }}" \
         | jq '.collection' > latest_collection.json
 
+        echo "Downloaded latest collection:"
+        cat latest_collection.json
+
+    # Run the Postman tests
     - name: Run Postman Collection via Postman CLI
       run: |
         postman collection run latest_collection.json
-
