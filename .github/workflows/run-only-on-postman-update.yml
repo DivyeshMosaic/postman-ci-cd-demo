@@ -1,0 +1,68 @@
+name: Run Postman Tests Only When Collection Updates
+
+on:
+  schedule:
+    - cron: "*/3 * * * *"   # RUNS EVERY 3 MINUTES
+  workflow_dispatch:        # manual trigger
+
+jobs:
+  check-and-run:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Setup Cache for tracking version
+      id: cache
+      uses: actions/cache@v3
+      with:
+        path: postman_version.txt
+        key: postman-version-cache
+
+    - name: Fetch Latest Postman Collection Metadata
+      id: meta
+      run: |
+        curl -s -X GET \
+          "https://api.postman.com/collections/${{ secrets.POSTMAN_COLLECTION_ID }}" \
+          -H "X-Api-Key: ${{ secrets.POSTMAN_API_KEY }}" \
+          | jq -r '.collection.info.updatedAt' > latest_version.txt
+        echo "latest_version=$(cat latest_version.txt)" >> $GITHUB_OUTPUT
+
+    - name: Detect changes
+      id: check
+      run: |
+        if [ -f postman_version.txt ]; then
+          old=$(cat postman_version.txt)
+        else
+          old=""
+        fi
+        new=$(cat latest_version.txt)
+        
+        echo "Old version: $old"
+        echo "New version: $new"
+
+        if [ "$old" = "$new" ]; then
+          echo "no_change=true" >> $GITHUB_OUTPUT
+        else
+          echo "no_change=false" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Stop if no changes
+      if: steps.check.outputs.no_change == 'true'
+      run: |
+        echo "No changes detected in Postman collection. Stopping workflow."
+        exit 0
+
+    - name: Save new version
+      run: |
+        cp latest_version.txt postman_version.txt
+
+    - name: Install Postman CLI
+      run: |
+        curl -o- "https://dl-cli.pstmn.io/install/linux64.sh" | sh
+
+    - name: Login to Postman CLI
+      run: |
+        postman login --with-api-key ${{ secrets.POSTMAN_API_KEY }}
+
+    - name: Run Latest Collection Tests
+      run: |
+        postman collection run ${{ secrets.POSTMAN_COLLECTION_ID }}
