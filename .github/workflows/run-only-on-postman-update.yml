@@ -2,67 +2,71 @@ name: Run Postman Tests Only When Collection Updates
 
 on:
   schedule:
-    - cron: "*/3 * * * *"   # RUNS EVERY 3 MINUTES
-  workflow_dispatch:        # manual trigger
+    - cron: "*/2 * * * *"      # checks every 2 minutes for collection updates
+  workflow_dispatch:           # allows manual trigger
 
 jobs:
   check-and-run:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Setup Cache for tracking version
+    - name: Restore version cache
       id: cache
       uses: actions/cache@v3
       with:
         path: postman_version.txt
-        key: postman-version-cache
+        key: postman-collection-version
 
-    - name: Fetch Latest Postman Collection Metadata
+    - name: Fetch Collection Metadata
       id: meta
       run: |
         curl -s -X GET \
           "https://api.postman.com/collections/${{ secrets.POSTMAN_COLLECTION_ID }}" \
           -H "X-Api-Key: ${{ secrets.POSTMAN_API_KEY }}" \
           | jq -r '.collection.info.updatedAt' > latest_version.txt
-        echo "latest_version=$(cat latest_version.txt)" >> $GITHUB_OUTPUT
+        
+        echo "LATEST_VERSION=$(cat latest_version.txt)" >> $GITHUB_ENV
 
-    - name: Detect changes
-      id: check
+    - name: Compare Versions
+      id: compare
       run: |
         if [ -f postman_version.txt ]; then
-          old=$(cat postman_version.txt)
+          OLD_VERSION=$(cat postman_version.txt)
         else
-          old=""
-        fi
-        new=$(cat latest_version.txt)
-        
-        echo "Old version: $old"
-        echo "New version: $new"
-
-        if [ "$old" = "$new" ]; then
-          echo "no_change=true" >> $GITHUB_OUTPUT
-        else
-          echo "no_change=false" >> $GITHUB_OUTPUT
+          OLD_VERSION=""
         fi
 
-    - name: Stop if no changes
-      if: steps.check.outputs.no_change == 'true'
+        echo "Old version: $OLD_VERSION"
+        echo "New version: $LATEST_VERSION"
+
+        if [ "$OLD_VERSION" = "$LATEST_VERSION" ]; then
+          echo "NO_CHANGE=true" >> $GITHUB_ENV
+        else
+          echo "$LATEST_VERSION" > postman_version.txt
+          echo "NO_CHANGE=false" >> $GITHUB_ENV
+        fi
+
+    - name: Stop if no changes detected
+      if: env.NO_CHANGE == 'true'
       run: |
-        echo "No changes detected in Postman collection. Stopping workflow."
+        echo "No updates in Postman collection. Stopping workflow."
         exit 0
-
-    - name: Save new version
-      run: |
-        cp latest_version.txt postman_version.txt
 
     - name: Install Postman CLI
       run: |
-        curl -o- "https://dl-cli.pstmn.io/install/linux64.sh" | sh
+        curl -o- 'https://dl-cli.pstmn.io/install/linux64.sh' | sh
 
     - name: Login to Postman CLI
       run: |
         postman login --with-api-key ${{ secrets.POSTMAN_API_KEY }}
 
-    - name: Run Latest Collection Tests
+    - name: Download latest Postman Collection
       run: |
-        postman collection run ${{ secrets.POSTMAN_COLLECTION_ID }}
+        curl -s -X GET \
+          "https://api.postman.com/collections/${{ secrets.POSTMAN_COLLECTION_ID }}" \
+          -H "X-Api-Key: ${{ secrets.POSTMAN_API_KEY }}" \
+          | jq '.collection' > latest_collection.json
+
+    - name: Run Postman Collection
+      run: |
+        postman collection run latest_collection.json
